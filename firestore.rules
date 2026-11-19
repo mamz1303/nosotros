@@ -1,0 +1,14 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Solo ustedes dos pueden leer y escribir.
+    // Cambia estos correos por los mismos que pusiste en js/config.js
+    function esNosotros() {
+      return request.auth != null
+        && request.auth.token.email in ['tu-correo@gmail.com', 'correo-de-ella@gmail.com'];
+    }
+    match /spaces/{space}/{document=**} {
+      allow read, write: if esNosotros();
+    }
+  }
+}
