@@ -15,7 +15,7 @@ export function render(view) {
       </header>
       <div class="msgs" id="msgs"></div>
       <form class="composer" id="f">
-        <label class="icon-btn" aria-label="Enviar foto">${icon("image")}<input type="file" accept="image/*" hidden id="img"></label>
+        <label class="icon-btn" aria-label="Enviar foto">${icon("image")}<input type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" hidden id="img"></label>
         <textarea id="t" rows="1" placeholder="Escribe un mensaje…" enterkeyhint="send"></textarea>
         <button class="send" aria-label="Enviar">${icon("send")}</button>
       </form>

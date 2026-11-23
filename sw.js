@@ -1,5 +1,5 @@
 // Service worker: permite instalar la app y abrirla rápido (caché del "cascarón")
-const CACHE = "nosotros-v1";
+const CACHE = "nosotros-v2";
 const SHELL = [
   "./", "./index.html", "./css/styles.css", "./manifest.webmanifest", "./icons/icon.svg",
   "./js/app.js", "./js/config.js", "./js/store.js", "./js/ui.js", "./js/services.js",

@@ -164,7 +164,7 @@ export function openComposer(existing = null, presetTags = [], presetAlbum = nul
     body: `
       ${editing ? `<div class="pick-preview">${(existing.images || []).map((im) => `<img src="${safeImg(im.thumb)}" alt="">`).join("")}</div>`
       : `<label class="drop" id="drop">
-          <input type="file" accept="image/*" multiple hidden id="file">
+          <input type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" multiple hidden id="file">
           ${icon("image")}<b>Elegir fotos</b><span class="small muted">Puedes elegir varias (carrusel)</span>
         </label>
         <div class="pick-preview" id="prev"></div>`}

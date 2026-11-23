@@ -1,5 +1,5 @@
 // Servicios: imágenes, ubicación, vistas previas de links, Spotify, calendario externo
-import { cloudinary } from "./config.js";
+import { cloudinary, googleMapsKey } from "./config.js";
 import { store, DEMO } from "./store.js";
 import { $, esc, modal, icon, toast, debounce, safeUrl, pad } from "./ui.js";
 
@@ -81,10 +81,62 @@ export function hydrateImages(root) {
 }
 
 // ============================================================ UBICACIÓN
-export async function searchPlaces(q) {
-  const r = await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=6&accept-language=es&q=${encodeURIComponent(q)}`);
+// Búsqueda con autocompletado (estilo app de taxi).
+// - Gratis y sin clave: Photon (datos de OpenStreetMap), priorizando lo cercano al mapa.
+// - Opcional: Google Places, si pones googleMapsKey en config.js (mejor con direcciones con número).
+async function photonSearch(q, near) {
+  const bias = near ? `&lat=${near.lat}&lon=${near.lng}&location_bias_scale=0.3` : "";
+  const r = await fetch(`https://photon.komoot.io/api/?limit=7${bias}&q=${encodeURIComponent(q)}`);
   const j = await r.json();
-  return j.map((p) => ({ name: p.name || p.display_name.split(",")[0], address: p.display_name, lat: +p.lat, lng: +p.lon }));
+  return (j.features || []).map((f) => {
+    const p = f.properties || {}, [lng, lat] = f.geometry.coordinates;
+    const street = [p.street, p.housenumber].filter(Boolean).join(" ");
+    const main = p.name || street || p.city || p.state || "Lugar";
+    const secondary = [p.name && street, p.district || p.locality, p.city || p.county, p.state, p.country]
+      .filter((x, i, a) => x && x !== main && a.indexOf(x) === i).join(", ");
+    return { name: main, address: secondary, lat, lng };
+  });
+}
+
+let gPlaces = null;
+function loadGooglePlaces() {
+  if (gPlaces) return gPlaces;
+  gPlaces = new Promise((res, rej) => {
+    window.__gmapsReady = () => google.maps.importLibrary("places").then(res, rej);
+    const sc = document.createElement("script");
+    sc.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(googleMapsKey)}&v=weekly&loading=async&callback=__gmapsReady`;
+    sc.async = true; sc.onerror = () => { gPlaces = null; rej(new Error("No cargó Google")); };
+    document.head.appendChild(sc);
+  });
+  return gPlaces;
+}
+let gToken = null;
+async function googleSearch(q, near) {
+  const lib = await loadGooglePlaces();
+  gToken ||= new lib.AutocompleteSessionToken();
+  const req = { input: q, sessionToken: gToken, language: "es", region: "pe" };
+  if (near) req.locationBias = { center: near, radius: 30000 };
+  const { suggestions } = await lib.AutocompleteSuggestion.fetchAutocompleteSuggestions(req);
+  return suggestions.filter((s) => s.placePrediction).map((s) => {
+    const pp = s.placePrediction;
+    return {
+      name: pp.mainText?.toString() || pp.text.toString(),
+      address: pp.secondaryText?.toString() || "",
+      // las coordenadas se piden solo al elegir (así el autocompletado no se cobra)
+      resolve: async () => {
+        const place = pp.toPlace();
+        await place.fetchFields({ fields: ["location", "formattedAddress"] });
+        gToken = null;
+        return { lat: place.location.lat(), lng: place.location.lng(), address: place.formattedAddress || "" };
+      },
+    };
+  });
+}
+export async function searchPlaces(q, near) {
+  if (googleMapsKey) {
+    try { return await googleSearch(q, near); } catch (e) { console.warn("Google Places falló, uso OSM", e); }
+  }
+  return photonSearch(q, near);
 }
 export async function reverseGeocode(lat, lng) {
   try {
@@ -109,8 +161,8 @@ export function mapsUrl(p) {
     : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.address || p.name)}`;
 }
 export function tileLayer() {
-  return L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
-    maxZoom: 19, attribution: '&copy; OpenStreetMap &copy; CARTO',
+  return L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 19, attribution: '&copy; OpenStreetMap',
   });
 }
 export function heartMarker(color = "#c2410c") {
@@ -129,60 +181,74 @@ export function miniMap(el, p, zoom = 15) {
   return m;
 }
 
-// Selector de ubicación: buscar, tocar el mapa o usar GPS
+// Selector de ubicación estilo app de taxi: escribe la dirección y elige de la lista,
+// o toca / arrastra el pin en el mapa, o usa tu ubicación actual.
 export function pickLocation(initial) {
   return new Promise((resolve) => {
-    let chosen = initial ? { ...initial } : null, done = false;
+    let chosen = initial ? { ...initial } : null, done = false, seq = 0;
     const m = modal({
       title: "Elegir ubicación", wide: true,
       onClose: () => { if (!done) resolve(undefined); },
       body: `
-        <div class="search-box">${icon("search")}<input type="search" placeholder="Busca un lugar, dirección o ciudad" id="lp-q"></div>
-        <div id="lp-results" class="results"></div>
+        <div class="search-box taxi">${icon("pin")}<input type="search" placeholder="¿A dónde? Escribe dirección o lugar" id="lp-q" autocomplete="off" enterkeyhint="search"></div>
+        <div id="lp-results" class="results taxi-results"></div>
         <div id="lp-map" class="picker-map"></div>
-        <p class="muted small">Toca el mapa para mover el pin.</p>
+        <p class="muted small">También puedes tocar el mapa o arrastrar el pin.</p>
         <label class="field"><span>Nombre del lugar</span><input id="lp-name" placeholder="Ej. Mirador de Yanahuara"></label>
         <div class="row gap wrap">
-          <button class="btn ghost" id="lp-gps">${icon("locate")} Mi ubicación</button>
           ${initial ? `<button class="btn ghost danger-text" id="lp-clear">Quitar</button>` : ""}
           <span class="spacer"></span>
           <button class="btn primary" id="lp-ok">Usar esta ubicación</button>
         </div>`,
     });
-    const el = m.el;
-    const map = L.map($("#lp-map", el)).setView(chosen ? [chosen.lat, chosen.lng] : [-16.409, -71.537], chosen ? 15 : 12);
+    const el = m.el, q = $("#lp-q", el), results = $("#lp-results", el);
+    const map = L.map($("#lp-map", el)).setView(chosen ? [chosen.lat, chosen.lng] : [-16.409, -71.537], chosen ? 16 : 12);
     tileLayer().addTo(map);
     let marker = null;
     const place = async (lat, lng, name, address) => {
       chosen = { lat, lng, name: name || "", address: address || "" };
-      if (marker) marker.setLatLng([lat, lng]); else marker = L.marker([lat, lng], { icon: heartMarker() }).addTo(map);
+      if (marker) marker.setLatLng([lat, lng]);
+      else {
+        marker = L.marker([lat, lng], { icon: heartMarker(), draggable: true }).addTo(map);
+        marker.on("dragend", () => { const p = marker.getLatLng(); place(p.lat, p.lng); });
+      }
       if (!name) { $("#lp-name", el).value = "…"; const g = await reverseGeocode(lat, lng); chosen.name = g.name; chosen.address = g.address; }
       $("#lp-name", el).value = chosen.name;
     };
-    if (chosen) { place(chosen.lat, chosen.lng, chosen.name, chosen.address); }
+    if (chosen) place(chosen.lat, chosen.lng, chosen.name, chosen.address);
     setTimeout(() => map.invalidateSize(), 250);
-    map.on("click", (e) => place(e.latlng.lat, e.latlng.lng));
-    const results = $("#lp-results", el);
-    $("#lp-q", el).oninput = debounce(async (e) => {
-      const q = e.target.value.trim();
-      if (q.length < 3) { results.innerHTML = ""; return; }
-      try {
-        const list = await searchPlaces(q);
-        results.innerHTML = list.map((p, i) => `<button class="result" data-i="${i}"><b>${esc(p.name)}</b><span>${esc(p.address)}</span></button>`).join("")
-          || `<p class="muted small">Sin resultados</p>`;
-        results.querySelectorAll(".result").forEach((b) => (b.onclick = () => {
-          const p = list[+b.dataset.i]; results.innerHTML = "";
-          map.setView([p.lat, p.lng], 16); place(p.lat, p.lng, p.name, p.address);
-        }));
-      } catch { results.innerHTML = `<p class="muted small">No se pudo buscar ahora</p>`; }
-    }, 500);
-    $("#lp-gps", el).onclick = async () => {
-      try { const p = await getCurrentPosition(); map.setView([p.lat, p.lng], 16); place(p.lat, p.lng); }
-      catch (e) { toast(e.message); }
+    map.on("click", (e) => { results.innerHTML = ""; place(e.latlng.lat, e.latlng.lng); });
+
+    const useGps = async () => {
+      results.innerHTML = `<p class="muted small pad-s">Buscando tu ubicación…</p>`;
+      try { const p = await getCurrentPosition(); results.innerHTML = ""; map.setView([p.lat, p.lng], 17); place(p.lat, p.lng); }
+      catch (e) { results.innerHTML = ""; toast(e.message); }
     };
+    const gpsRow = `<button class="result" data-gps>${icon("locate")}<div><b>Usar mi ubicación actual</b><span>GPS del celular</span></div></button>`;
+    const showGps = () => { results.innerHTML = gpsRow; $("[data-gps]", results).onclick = useGps; };
+    q.onfocus = () => { if (!q.value.trim()) showGps(); };
+    q.oninput = debounce(async () => {
+      const text = q.value.trim();
+      if (text.length < 3) { text ? (results.innerHTML = "") : showGps(); return; }
+      const my = ++seq;
+      results.innerHTML = `<p class="muted small pad-s">Buscando…</p>`;
+      try {
+        const c = map.getCenter();
+        const list = await searchPlaces(text, { lat: c.lat, lng: c.lng });
+        if (my !== seq) return; // llegó una respuesta vieja
+        results.innerHTML = list.map((p, i) => `<button class="result" data-i="${i}">${icon("pin")}<div><b>${esc(p.name)}</b><span>${esc(p.address)}</span></div></button>`).join("")
+          || `<p class="muted small pad-s">Sin resultados. Prueba con el nombre del lugar o la calle y el distrito.</p>`;
+        results.querySelectorAll("[data-i]").forEach((b) => (b.onclick = async () => {
+          let p = list[+b.dataset.i];
+          results.innerHTML = ""; q.blur();
+          if (p.resolve) { try { p = { ...p, ...(await p.resolve()) }; } catch { return toast("No se pudo abrir ese lugar"); } }
+          map.setView([p.lat, p.lng], 17); place(p.lat, p.lng, p.name, p.address);
+        }));
+      } catch { if (my === seq) results.innerHTML = `<p class="muted small pad-s">No se pudo buscar ahora</p>`; }
+    }, 350);
     $("#lp-clear", el)?.addEventListener("click", () => { done = true; resolve(null); m.close(); });
     $("#lp-ok", el).onclick = () => {
-      if (!chosen) return toast("Elige un punto en el mapa");
+      if (!chosen) return toast("Busca una dirección o toca el mapa");
       chosen.name = $("#lp-name", el).value.trim() || chosen.name;
       done = true; resolve(chosen); m.close();
     };

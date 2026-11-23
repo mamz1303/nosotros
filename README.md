@@ -70,6 +70,21 @@ Edita `js/config.js`:
 > **iPhone:** si al entrar con Google en la app instalada se queda en blanco o vuelve al login (Safari limita las
 > ventanas emergentes en apps instaladas), usen **correo y contraseña**: botón *Crear cuenta* una sola vez con el correo autorizado.
 
+## Búsqueda de direcciones con Google (opcional)
+
+Por defecto el buscador de ubicación usa OpenStreetMap (gratis, sin tarjeta). Encuentra bien lugares, calles y distritos,
+pero no siempre direcciones con número exacto. Si quieren la base de Google:
+
+1. Entra a <https://console.cloud.google.com> con el mismo proyecto de Firebase (`nosotros-469d0`).
+2. **Facturación**: vincula una cuenta de facturación (pide tarjeta). Google da **10.000 búsquedas gratis al mes**;
+   para dos personas no se llega ni cerca, pero pon un tope en **APIs y servicios → Cuotas** por tranquilidad.
+3. **APIs y servicios → Biblioteca**: habilita **Maps JavaScript API** y **Places API (New)**.
+4. **APIs y servicios → Credenciales → Crear credenciales → Clave de API**. En *Restricciones de aplicación* elige
+   **Sitios web** y agrega `https://mamz1303.github.io/*`; en *Restricciones de API* marca solo esas dos APIs.
+5. Pega la clave en `googleMapsKey` dentro de `js/config.js`.
+
+Si la clave falla o se acaba la cuota, la app vuelve sola a OpenStreetMap.
+
 ## Limitaciones honestas
 - **Spotify:** el reproductor integrado reproduce completo si la persona tiene sesión de Spotify abierta en ese navegador; si no, son vistas previas de 30 s. Un reproductor 100 % propio requiere Spotify Premium + app registrada en Spotify Developers.
 - **Avisos con la app cerrada:** las notificaciones push reales necesitan un servidor (Cloud Functions = plan de pago). Por eso cada fecha tiene botones para pasarla a Google Calendar / .ics, que sí avisan en el celular. Con la app abierta (o en segundo plano) sí avisa de mensajes nuevos y fechas de hoy/mañana.
