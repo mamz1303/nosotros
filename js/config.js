@@ -6,13 +6,13 @@
 //    (Consola Firebase → Configuración del proyecto → Tus apps → Web)
 //    Si lo dejas vacío (apiKey: ""), la app arranca en MODO DEMO
 //    y guarda todo solo en este navegador (localStorage).
-export const firebaseConfig = {
+export firebaseConfig = {
   apiKey: "AIzaSyC073QXbGvXM-svQRGGGBxYQey_AsDRHBU",
   authDomain: "nosotros-469d0.firebaseapp.com",
   projectId: "nosotros-469d0",
   storageBucket: "nosotros-469d0.firebasestorage.app",
   messagingSenderId: "430646214800",
-  appId: "1:430646214800:web:8a4d97a418638e09669815"
+  appId: "1:430646214800:web:2b6c1c460fc7cf61669815"
 };
 
 // 2) Las dos personas de la app (correo con el que inician sesión).
