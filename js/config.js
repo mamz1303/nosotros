@@ -6,7 +6,7 @@
 //    (Consola Firebase → Configuración del proyecto → Tus apps → Web)
 //    Si lo dejas vacío (apiKey: ""), la app arranca en MODO DEMO
 //    y guarda todo solo en este navegador (localStorage).
-export firebaseConfig = {
+export const firebaseConfig = {
   apiKey: "AIzaSyC073QXbGvXM-svQRGGGBxYQey_AsDRHBU",
   authDomain: "nosotros-469d0.firebaseapp.com",
   projectId: "nosotros-469d0",
