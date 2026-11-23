@@ -7,19 +7,19 @@
 //    Si lo dejas vacío (apiKey: ""), la app arranca en MODO DEMO
 //    y guarda todo solo en este navegador (localStorage).
 export const firebaseConfig = {
-  apiKey: "",
-  authDomain: "",
-  projectId: "",
-  storageBucket: "",
-  messagingSenderId: "",
-  appId: "",
+  apiKey: "AIzaSyC073QXbGvXM-svQRGGGBxYQey_AsDRHBU",
+  authDomain: "nosotros-469d0.firebaseapp.com",
+  projectId: "nosotros-469d0",
+  storageBucket: "nosotros-469d0.firebasestorage.app",
+  messagingSenderId: "430646214800",
+  appId: "1:430646214800:web:8a4d97a418638e09669815"
 };
 
 // 2) Las dos personas de la app (correo con el que inician sesión).
 //    Deben coincidir con los correos de firestore.rules.
 export const people = {
-  "tu-correo@gmail.com":   { name: "Manu",     color: "#c2410c" },
-  "correo-de-ella@gmail.com": { name: "Graciela", color: "#be185d" },
+  "mamz1303@gmail.com":   { name: "Manu",     color: "#c2410c" },
+  "balbint17@gmail.com": { name: "Cheli", color: "#be185d" },
 };
 
 // 3) Nombre del "espacio" (carpeta raíz en Firestore). Puedes dejarlo así.
